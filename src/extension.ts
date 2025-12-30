@@ -39,8 +39,9 @@ async function callOpenAI(prompt: string, userText: string): Promise<string> {
         });
 
         return response.choices[0]?.message?.content || 'No response from AI';
-    } catch (error: any) {
-        throw new Error(`OpenAI API error: ${error.message}`);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        throw new Error(`OpenAI API error: ${message}`);
     }
 }
 
@@ -75,8 +76,9 @@ async function processSelectedText(
                 vscode.window.showInformationMessage(`${actionName} completed!`);
             }
         );
-    } catch (error: any) {
-        vscode.window.showErrorMessage(`${actionName} failed: ${error.message}`);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(`${actionName} failed: ${message}`);
     }
 }
 
