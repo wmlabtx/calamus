@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import OpenAI from 'openai';
 
 let openai: OpenAI | null = null;
+let currentApiKey: string | null = null;
 
 function getOpenAIClient(): OpenAI {
     const config = vscode.workspace.getConfiguration('calamus');
@@ -11,8 +12,9 @@ function getOpenAIClient(): OpenAI {
         throw new Error('OpenAI API key is not configured. Please set it in the extension settings.');
     }
 
-    if (!openai) {
+    if (!openai || currentApiKey !== apiKey) {
         openai = new OpenAI({ apiKey });
+        currentApiKey = apiKey;
     }
 
     return openai;
@@ -155,6 +157,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration('calamus.apiKey')) {
                 openai = null;
+                currentApiKey = null;
             }
         })
     );
@@ -162,4 +165,5 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {
     openai = null;
+    currentApiKey = null;
 }

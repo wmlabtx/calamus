@@ -61,7 +61,7 @@ Before using Calamus, you need to configure your OpenAI API key:
 
 ## Requirements
 
-- VSCode version 1.85.0 or higher
+- VSCode version 1.107.0 or higher
 - An OpenAI API key
 - Internet connection for API calls
 
