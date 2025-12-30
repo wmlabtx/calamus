@@ -1,0 +1,123 @@
+{
+  "name": "calamus",
+  "displayName": "Calamus - AI Text Assistant",
+  "description": "VSCode addon to bring AI functions to text documents",
+  "version": "0.0.1",
+  "publisher": "calamus",
+  "engines": {
+    "vscode": "^1.107.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "ai",
+    "assistant",
+    "text",
+    "openai",
+    "gpt"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "calamus.summarize",
+        "title": "Calamus: Summarize Text"
+      },
+      {
+        "command": "calamus.improve",
+        "title": "Calamus: Improve Text"
+      },
+      {
+        "command": "calamus.translate",
+        "title": "Calamus: Translate Text"
+      },
+      {
+        "command": "calamus.explain",
+        "title": "Calamus: Explain Code/Text"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "when": "editorHasSelection",
+          "command": "calamus.summarize",
+          "group": "calamus@1"
+        },
+        {
+          "when": "editorHasSelection",
+          "command": "calamus.improve",
+          "group": "calamus@2"
+        },
+        {
+          "when": "editorHasSelection",
+          "command": "calamus.translate",
+          "group": "calamus@3"
+        },
+        {
+          "when": "editorHasSelection",
+          "command": "calamus.explain",
+          "group": "calamus@4"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Calamus AI Assistant",
+      "properties": {
+        "calamus.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API Key for AI operations",
+          "markdownDescription": "Your OpenAI API Key. Get one at [OpenAI Platform](https://platform.openai.com/api-keys)"
+        },
+        "calamus.model": {
+          "type": "string",
+          "default": "gpt-4o-mini",
+          "enum": [
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-4-turbo",
+            "gpt-3.5-turbo"
+          ],
+          "description": "OpenAI model to use for AI operations"
+        },
+        "calamus.maxTokens": {
+          "type": "number",
+          "default": 2000,
+          "description": "Maximum number of tokens in the response"
+        },
+        "calamus.temperature": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Sampling temperature (0 = focused, 2 = creative)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "echo \"No linter configured\"",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "@types/vscode": "^1.107.0",
+    "@vscode/vsce": "^3.7.1",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "openai": "^6.15.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wmlabtx/calamus"
+  }
+}
