@@ -8,9 +8,9 @@
   "description": "VSCode addon to bring AI functions to text documents",
   "author": {
     "name": "Murad Ismayilov",
-    "url": "https://github.com/wmlabtx"
+    "url": "https://github.com/wmlabtx/calamus"
   },
-  "publisher": "calamus",
+  "publisher": "MuradIsmayilov",
   "categories": [
     "Other",
     "Machine Learning"
