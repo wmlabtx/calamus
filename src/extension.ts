@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import { GoogleGenAI } from "@google/genai";
-import * as Diff from 'diff';
+import * as Diff from 'diff'; // Still needed for logic outside utils if any, but main diff util is now in utils
+import { getTargetText, visualizeDiff, getParagraphRange } from './utils';
 
-// variables
+
+// Variables
 
 let log: vscode.LogOutputChannel | null = null;
 let cachedAiClient: GoogleGenAI | null = null;
@@ -11,6 +13,8 @@ let lastManualCompletion: string | null = null;
 let completionPosition: vscode.Position | null = null;
 let lastDiagnosticFix: string | null = null;
 let lastDiagnosticRange: vscode.Range | null = null;
+
+// Decoration types
 
 const ghostTextDecorationType = vscode.window.createTextEditorDecorationType({
     after: {
@@ -24,8 +28,11 @@ const diagnosticRemovedType = vscode.window.createTextEditorDecorationType({
     color: new vscode.ThemeColor('errorForeground'),
 });
 
-// For replacement arrows, we need a way to store dynamic decoration types to dispose them later
 let dynamicDecorations: vscode.TextEditorDecorationType[] = [];
+
+// Description: clear ghost text
+// Parameters: editor - the current text editor
+// Returns: none
 
 function clearGhostText(editor: vscode.TextEditor | undefined) {
     if (editor) {
@@ -35,6 +42,10 @@ function clearGhostText(editor: vscode.TextEditor | undefined) {
     completionPosition = null;
     vscode.commands.executeCommand('setContext', 'calamus.hasCompletion', false);
 }
+
+// Description: clear all diagnostics
+// Parameters: editor - the current text editor
+// Returns: none
 
 function clearAllDiagnostics(editor: vscode.TextEditor | undefined) {
     if (editor) {
@@ -53,21 +64,7 @@ function clearAllDiagnostics(editor: vscode.TextEditor | undefined) {
 // Parameters: editor - the current text editor, line - the current line number
 // Returns: the range of the current paragraph
 
-function getParagraphRange(editor: vscode.TextEditor, line: number) {
-    let paraStart = line;
-    let paraEnd = line;
-
-    while (paraStart > 0 && !editor.document.lineAt(paraStart - 1).isEmptyOrWhitespace) {
-        paraStart--;
-    }
-    while (paraEnd < editor.document.lineCount - 1 && !editor.document.lineAt(paraEnd + 1).isEmptyOrWhitespace) {
-        paraEnd++;
-    }
-
-    const startPos = new vscode.Position(paraStart, 0);
-    const endPos = editor.document.lineAt(paraEnd).range.end;
-    return new vscode.Range(startPos, endPos);
-}
+// getParagraphRange moved to utils.ts
 
 // Description: Get the response from Gemini
 // Parameters: contents - the text to analyze, prompt - the prompt to use
@@ -136,9 +133,9 @@ async function getGeminiResponse(contents: string, prompt: string): Promise<any>
     }
 }
 
-// description: activation function
-// parameters: context - the extension context
-// returns: none
+// Description: activation function
+// Parameters: context - the extension context
+// Returns: none
 
 export function activate(context: vscode.ExtensionContext) {
     const config = vscode.workspace.getConfiguration('calamus');
@@ -152,108 +149,38 @@ export function activate(context: vscode.ExtensionContext) {
 
     const checkTextCommand = vscode.commands.registerCommand('calamus.runTextDiagnostic', async () => {
         const editor = vscode.window.activeTextEditor;
-        if (editor) {
-            clearAllDiagnostics(editor);
-            let selectedText = editor.document.getText(editor.selection);
-            if (editor.selection.isEmpty || selectedText === '') {
-                const range = getParagraphRange(editor, editor.selection.active.line);
-                selectedText = editor.document.getText(range);
-            }
+        if (!editor) return;
 
-            log?.debug(`Text to check (length: ${selectedText.length})`);
-            log?.debug(selectedText);
+        clearAllDiagnostics(editor);
+        const target = await getTargetText({ editor, config, log });
+        if (!target) return;
 
-            if (!selectedText.trim()) {
-                const message = "No text found to check";
-                log?.info(message);
-                vscode.window.showInformationMessage(message);
-                return;
-            }
+        const instruction = config.get<string[]>("proofreadingInstructions");
+        const prompt = instruction ? instruction.join('\n') : [
+            "You are a professional editor and expert proofreader.",
+            "Analyze the text for the following issues:",
+            "1. Grammar, spelling, and punctuation errors.",
+            "2. Semantic inconsistencies and logical errors (e.g., questions that end as statements).",
+            "3. Inconsistent verb tenses or conflicting writing styles.",
+            "4. Awkward phrasing and poor sentence flow (e.g., run-on sentences or choppy text).",
+            "5. Redundancy, wordiness, and tautology (eliminate unnecessary fillers).",
+            "6. Vague word choices (replace general terms with more precise, context-aware vocabulary).",
+            "7. Ambiguous pronoun references (ensure it is clear what 'it', 'this', or 'they' refers to).",
+            "Your goal is to make the text coherent, professional, and correct while preserving the original intent.",
+            "Fix all identified issues. Return only the corrected text without any explanations or meta-talk."
+        ].join('\n');
 
-            if (selectedText.trim().length < 10) {
-                const message = "Text to check must be at least 10 characters long";
-                log?.info(message);
-                vscode.window.showInformationMessage(message);
-                return;
-            }
+        const response = await getGeminiResponse(target.text, prompt);
+        if (response && response !== target.text) {
+            const results = visualizeDiff(editor, target.text, response, target.range, diagnosticRemovedType);
+            dynamicDecorations.push(...results.dynamic);
 
-            const prompt = [
-                "You are a professional editor and expert proofreader.",
-                "Analyze the text for the following issues:",
-                "1. Grammar, spelling, and punctuation errors.",
-                "2. Semantic inconsistencies and logical errors (e.g., questions that end as statements).",
-                "3. Inconsistent verb tenses or conflicting writing styles.",
-                "4. Awkward phrasing and poor sentence flow (e.g., run-on sentences or choppy text).",
-                "5. Redundancy, wordiness, and tautology (eliminate unnecessary fillers).",
-                "6. Vague word choices (replace general terms with more precise, context-aware vocabulary).",
-                "7. Ambiguous pronoun references (ensure it is clear what 'it', 'this', or 'they' refers to).",
-                "Your goal is to make the text coherent, professional, and correct while preserving the original intent.",
-                "Fix all identified issues. Return only the corrected text without any explanations or meta-talk."
-            ].join('\n');
-
-            const response = await getGeminiResponse(selectedText, prompt);
-            if (response && response !== selectedText) {
-                const diffs = Diff.diffWordsWithSpace(selectedText, response);
-                const removed: vscode.DecorationOptions[] = [];
-
-                let offset = 0;
-
-                let checkRange: vscode.Range;
-                if (editor.selection.isEmpty) {
-                    checkRange = getParagraphRange(editor, editor.selection.active.line);
-                } else {
-                    checkRange = editor.selection;
-                }
-                const baseOffset = editor.document.offsetAt(checkRange.start);
-
-                for (let i = 0; i < diffs.length; i++) {
-                    const part = diffs[i];
-                    if (part.removed) {
-                        const start = editor.document.positionAt(baseOffset + offset);
-                        const end = editor.document.positionAt(baseOffset + offset + part.value.length);
-                        const nextPart = i + 1 < diffs.length ? diffs[i + 1] : null;
-
-                        if (nextPart && nextPart.added) {
-                            const dynamicType = vscode.window.createTextEditorDecorationType({
-                                after: {
-                                    contentText: ` → ${nextPart.value.trim()}`,
-                                    color: new vscode.ThemeColor('editorGhostText.foreground'),
-                                    fontStyle: 'italic',
-                                    margin: '0 0 0 0.2em'
-                                }
-                            });
-                            dynamicDecorations.push(dynamicType);
-                            editor.setDecorations(dynamicType, [{ range: new vscode.Range(start, end) }]);
-                            i++; // skip addition
-                        } else {
-                            removed.push({ range: new vscode.Range(start, end) });
-                        }
-                        offset += part.value.length;
-                    } else if (part.added) {
-                        const anchor = editor.document.positionAt(baseOffset + offset);
-                        const dynamicType = vscode.window.createTextEditorDecorationType({
-                            after: {
-                                contentText: ` [+] ${part.value.trim()}`,
-                                color: new vscode.ThemeColor('editorGhostText.foreground'),
-                                fontStyle: 'italic',
-                                margin: '0 0 0 0.2em'
-                            }
-                        });
-                        dynamicDecorations.push(dynamicType);
-                        editor.setDecorations(dynamicType, [{ range: new vscode.Range(anchor, anchor) }]);
-                    } else {
-                        offset += part.value.length;
-                    }
-                }
-                editor.setDecorations(diagnosticRemovedType, removed);
-
-                lastDiagnosticFix = response;
-                lastDiagnosticRange = checkRange;
-                vscode.commands.executeCommand('setContext', 'calamus.hasCompletion', true);
-                log?.debug('Diagnostic fix stored and context set for Tab accept');
-            } else if (response === selectedText) {
-                vscode.window.showInformationMessage("No issues found!");
-            }
+            lastDiagnosticFix = response;
+            lastDiagnosticRange = target.range;
+            vscode.commands.executeCommand('setContext', 'calamus.hasCompletion', true);
+            log?.debug('Diagnostic fix stored and context set for Tab accept');
+        } else if (response === target.text) {
+            vscode.window.showInformationMessage("No issues found!");
         }
     });
 
@@ -263,108 +190,35 @@ export function activate(context: vscode.ExtensionContext) {
 
     const translateTextCommand = vscode.commands.registerCommand('calamus.runTranslateText', async () => {
         const editor = vscode.window.activeTextEditor;
-        if (editor) {
-            clearAllDiagnostics(editor);
-            let selectedText = editor.document.getText(editor.selection);
-            if (editor.selection.isEmpty || selectedText === '') {
-                const range = getParagraphRange(editor, editor.selection.active.line);
-                selectedText = editor.document.getText(range);
-            }
+        if (!editor) return;
 
-            log?.debug(`Text to translate (length: ${selectedText.length})`);
-            log?.debug(selectedText);
+        clearAllDiagnostics(editor);
+        const target = await getTargetText({ editor, config, log });
+        if (!target) return;
 
-            if (!selectedText.trim()) {
-                const message = "No text found to check";
-                log?.info(message);
-                vscode.window.showInformationMessage(message);
-                return;
-            }
+        const secondLanguage = config.get<string>('secondLanguage');
+        const prompt = [
+            `You are a professional bi-lingual translator fluent in English and ${secondLanguage}.`,
+            "Task: Detect limits language of the input text.",
+            `1. If the text is primarily in English, translate it to natural, high-quality ${secondLanguage}.`,
+            `2. If the text is in ${secondLanguage} or in a mix of English and ${secondLanguage} or any other language, translate it to English.`,
+            "Requirements:",
+            "1. Maintain the original tone, style, volume, and formatting.",
+            "2. Preserve the user's intent and nuance (e.g., formal vs. casual).",
+            "3. Do not add explanations, notes, or meta-text.",
+            "4. Return only the direct translation."
+        ].join('\n');
 
-            if (selectedText.trim().length < 10) {
-                const message = "Text to translate must be at least 10 characters long";
-                log?.info(message);
-                vscode.window.showInformationMessage(message);
-                return;
-            }
+        const response = await getGeminiResponse(target.text, prompt);
+        if (response && response !== target.text) {
+            const results = visualizeDiff(editor, target.text, response, target.range, diagnosticRemovedType);
+            dynamicDecorations.push(...results.dynamic);
 
-            const secondLanguage = vscode.workspace.getConfiguration('calamus').get('secondLanguage');
-
-            const prompt = [
-                `You are a professional bi-lingual translator fluent in English and ${secondLanguage}.`,
-                "Task: Detect limits language of the input text.",
-                `1. If the text is primarily in English, translate it to natural, high-quality ${secondLanguage}.`,
-                `2. If the text is in ${secondLanguage} or in a mix of English and ${secondLanguage} or any other language, translate it to English.`,
-                "Requirements:",
-                "1. Maintain the original tone, style, volume, and formatting.",
-                "2. Preserve the user's intent and nuance (e.g., formal vs. casual).",
-                "3. Do not add explanations, notes, or meta-text.",
-                "4. Return only the direct translation."
-            ].join('\n');
-
-            const response = await getGeminiResponse(selectedText, prompt);
-            if (response) {
-                const diffs = Diff.diffWordsWithSpace(selectedText, response);
-                const removed: vscode.DecorationOptions[] = [];
-
-                let offset = 0;
-
-                let checkRange: vscode.Range;
-                if (editor.selection.isEmpty) {
-                    checkRange = getParagraphRange(editor, editor.selection.active.line);
-                } else {
-                    checkRange = editor.selection;
-                }
-                const baseOffset = editor.document.offsetAt(checkRange.start);
-
-                for (let i = 0; i < diffs.length; i++) {
-                    const part = diffs[i];
-                    if (part.removed) {
-                        const start = editor.document.positionAt(baseOffset + offset);
-                        const end = editor.document.positionAt(baseOffset + offset + part.value.length);
-                        const nextPart = i + 1 < diffs.length ? diffs[i + 1] : null;
-
-                        if (nextPart && nextPart.added) {
-                            const dynamicType = vscode.window.createTextEditorDecorationType({
-                                after: {
-                                    contentText: ` → ${nextPart.value.trim()}`,
-                                    color: new vscode.ThemeColor('editorGhostText.foreground'),
-                                    fontStyle: 'italic',
-                                    margin: '0 0 0 0.2em'
-                                }
-                            });
-                            dynamicDecorations.push(dynamicType);
-                            editor.setDecorations(dynamicType, [{ range: new vscode.Range(start, end) }]);
-                            i++; // skip addition
-                        } else {
-                            removed.push({ range: new vscode.Range(start, end) });
-                        }
-                        offset += part.value.length;
-                    } else if (part.added) {
-                        const anchor = editor.document.positionAt(baseOffset + offset);
-                        const dynamicType = vscode.window.createTextEditorDecorationType({
-                            after: {
-                                contentText: ` [+] ${part.value.trim()}`,
-                                color: new vscode.ThemeColor('editorGhostText.foreground'),
-                                fontStyle: 'italic',
-                                margin: '0 0 0 0.2em'
-                            }
-                        });
-                        dynamicDecorations.push(dynamicType);
-                        editor.setDecorations(dynamicType, [{ range: new vscode.Range(anchor, anchor) }]);
-                    } else {
-                        offset += part.value.length;
-                    }
-                }
-                editor.setDecorations(diagnosticRemovedType, removed);
-
-                lastDiagnosticFix = response;
-                lastDiagnosticRange = checkRange;
-                vscode.commands.executeCommand('setContext', 'calamus.hasCompletion', true);
-                log?.debug('Diagnostic fix stored and context set for Tab accept');
-            } else if (response === selectedText) {
-                vscode.window.showInformationMessage("No issues found!");
-            }
+            lastDiagnosticFix = response;
+            lastDiagnosticRange = target.range;
+            vscode.commands.executeCommand('setContext', 'calamus.hasCompletion', true);
+        } else if (response === target.text) {
+            vscode.window.showInformationMessage("No issues found!");
         }
     });
 
@@ -374,121 +228,50 @@ export function activate(context: vscode.ExtensionContext) {
 
     const improveTextCommand = vscode.commands.registerCommand('calamus.runImproveText', async () => {
         const editor = vscode.window.activeTextEditor;
-        if (editor) {
-            clearAllDiagnostics(editor);
-            let selectedText = editor.document.getText(editor.selection);
-            if (editor.selection.isEmpty || selectedText === '') {
-                const range = getParagraphRange(editor, editor.selection.active.line);
-                selectedText = editor.document.getText(range);
-            }
+        if (!editor) return;
 
-            log?.debug(`Text to improve (length: ${selectedText.length})`);
-            log?.debug(selectedText);
+        clearAllDiagnostics(editor);
+        const target = await getTargetText({ editor, config, log });
+        if (!target) return;
 
-            if (!selectedText.trim()) {
-                const message = "No text found to improve";
-                log?.info(message);
-                vscode.window.showInformationMessage(message);
-                return;
-            }
+        const defaultPrompt = [
+            "1. Maintain the original tone and approximate length",
+            "2. Ensure the output looks naturally typed (no special typography, icons, bullets, lists or line breaks)",
+            "3. Suggested text must be: ",
+            "  - grammatically correct",
+            "  - friendly and professional",
+            "  - free from ambiguous statements",
+            "  - free from personal criticism or negativity",
+            "  - free from offensive content",
+            "  - appropriate for US workplace communication",
+            "4. Use modern American English",
+            "5. Allow professional IT/AWS slang: AWS, org, IP, UDP, tofu, etc. (only if present in original)",
+            "6. Allow abbreviations and contractions",
+            "7. Make it look quickly typed by a human, not formally composed",
+            "8. Error Correction The input text may contain:",
+            "  - syntax/grammar errors",
+            "  - stylistic issues",
+            "  - factual inaccuracies",
+            "  - ambiguous statements",
+            "  - unintentional negativity",
+            "Always correct these issues",
+            "9. If the text is not in English or contains non-English words: translate it to English"
+        ].join('\n');
 
-            if (selectedText.trim().length < 10) {
-                const message = "Text to improve must be at least 10 characters long";
-                log?.info(message);
-                vscode.window.showInformationMessage(message);
-                return;
-            }
+        const instructions = config.get<string[]>("improveTextInstructions");
+        const prompt = instructions ? instructions.join('\n') : defaultPrompt;
 
-            const defaultPrompt = [
-                "1. Maintain the original tone and approximate length",
-                "2. Ensure the output looks naturally typed (no special typography, icons, bullets, lists or line breaks)",
-                "3. Suggested text must be: ",
-                "  - grammatically correct",
-                "  - friendly and professional",
-                "  - free from ambiguous statements",
-                "  - free from personal criticism or negativity",
-                "  - free from offensive content",
-                "  - appropriate for US workplace communication",
-                "4. Use modern American English",
-                "5. Allow professional IT/AWS slang: AWS, org, IP, UDP, tofu, etc. (only if present in original)",
-                "6. Allow abbreviations and contractions",
-                "7. Make it look quickly typed by a human, not formally composed",
-                "8. Error Correction The input text may contain:",
-                "  - syntax/grammar errors",
-                "  - stylistic issues",
-                "  - factual inaccuracies",
-                "  - ambiguous statements",
-                "  - unintentional negativity",
-                "Always correct these issues",
-                "9. If the text is not in English or contains non-English words: translate it to English"
-            ].join('\n');
+        const response = await getGeminiResponse(target.text, prompt);
+        if (response && response !== target.text) {
+            const results = visualizeDiff(editor, target.text, response, target.range, diagnosticRemovedType);
+            dynamicDecorations.push(...results.dynamic);
 
-            const instructions = config.get<string[]>("improveTextInstructions");
-            const prompt = instructions ? instructions.join('\n') : defaultPrompt;
-
-            const response = await getGeminiResponse(selectedText, prompt);
-            if (response) {
-                const diffs = Diff.diffWordsWithSpace(selectedText, response);
-                const removed: vscode.DecorationOptions[] = [];
-
-                let offset = 0;
-
-                let checkRange: vscode.Range;
-                if (editor.selection.isEmpty) {
-                    checkRange = getParagraphRange(editor, editor.selection.active.line);
-                } else {
-                    checkRange = editor.selection;
-                }
-                const baseOffset = editor.document.offsetAt(checkRange.start);
-
-                for (let i = 0; i < diffs.length; i++) {
-                    const part = diffs[i];
-                    if (part.removed) {
-                        const start = editor.document.positionAt(baseOffset + offset);
-                        const end = editor.document.positionAt(baseOffset + offset + part.value.length);
-                        const nextPart = i + 1 < diffs.length ? diffs[i + 1] : null;
-
-                        if (nextPart && nextPart.added) {
-                            const dynamicType = vscode.window.createTextEditorDecorationType({
-                                after: {
-                                    contentText: ` → ${nextPart.value.trim()}`,
-                                    color: new vscode.ThemeColor('editorGhostText.foreground'),
-                                    fontStyle: 'italic',
-                                    margin: '0 0 0 0.2em'
-                                }
-                            });
-                            dynamicDecorations.push(dynamicType);
-                            editor.setDecorations(dynamicType, [{ range: new vscode.Range(start, end) }]);
-                            i++; // skip addition
-                        } else {
-                            removed.push({ range: new vscode.Range(start, end) });
-                        }
-                        offset += part.value.length;
-                    } else if (part.added) {
-                        const anchor = editor.document.positionAt(baseOffset + offset);
-                        const dynamicType = vscode.window.createTextEditorDecorationType({
-                            after: {
-                                contentText: ` [+] ${part.value.trim()}`,
-                                color: new vscode.ThemeColor('editorGhostText.foreground'),
-                                fontStyle: 'italic',
-                                margin: '0 0 0 0.2em'
-                            }
-                        });
-                        dynamicDecorations.push(dynamicType);
-                        editor.setDecorations(dynamicType, [{ range: new vscode.Range(anchor, anchor) }]);
-                    } else {
-                        offset += part.value.length;
-                    }
-                }
-                editor.setDecorations(diagnosticRemovedType, removed);
-
-                lastDiagnosticFix = response;
-                lastDiagnosticRange = checkRange;
-                vscode.commands.executeCommand('setContext', 'calamus.hasCompletion', true);
-                log?.debug('Diagnostic fix stored and context set for Tab accept');
-            } else if (response === selectedText) {
-                vscode.window.showInformationMessage("No improvements found!");
-            }
+            lastDiagnosticFix = response;
+            lastDiagnosticRange = target.range;
+            vscode.commands.executeCommand('setContext', 'calamus.hasCompletion', true);
+            log?.debug('Diagnostic fix stored and context set for Tab accept');
+        } else if (response === target.text) {
+            vscode.window.showInformationMessage("No improvements found!");
         }
     });
 
@@ -578,9 +361,9 @@ export function activate(context: vscode.ExtensionContext) {
                 "You are a text continuation engine, not a chatbot or proofreader.",
                 "The user is writing and paused.",
                 "Continue their text naturally from where they stopped, preserving the style, tone, and mood.",
-                "Return only the new continuation words.",
+                "Your output will be appended DIRECTLY to the end of the user's text. Include any necessary leading whitespace.",
                 "Do not repeat any of the user's text.",
-                "Do not correct or modify the user's text - only add new words after it.",
+                "Do not correct or modify the user's text - only add new characters after it.",
                 "If the text ends mid-word, complete that word first, then continue.",
                 completionPrompt
             ].join('\n');
@@ -592,7 +375,8 @@ export function activate(context: vscode.ExtensionContext) {
 
                 let finalResponse = response;
                 const lastChar = selectedText.charAt(selectedText.length - 1);
-                if (lastChar !== ' ' && !finalResponse.startsWith(' ') && !/^[.,!?;]/.test(finalResponse)) {
+                // Check if text ends with punctuation and response doesn't start with space
+                if (/^[.,;!?;:,"'\-]$/.test(lastChar) && !finalResponse.startsWith(' ')) {
                     finalResponse = ' ' + finalResponse;
                 }
 
@@ -616,6 +400,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.window.onDidChangeTextEditorSelection((e) => {
+            if (e.textEditor !== vscode.window.activeTextEditor) {
+                return;
+            }
             const pos = e.selections[0].active;
             if (lastManualCompletion && completionPosition) {
                 if (pos.line !== completionPosition.line || pos.character !== completionPosition.character) {
@@ -643,9 +430,4 @@ export function deactivate() {
     }
 
     cachedAiClient = null;
-    lastUsedApiKey = null;
-    lastManualCompletion = null;
-    completionPosition = null;
-    lastDiagnosticFix = null;
-    lastDiagnosticRange = null;
 }
