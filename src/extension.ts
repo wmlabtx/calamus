@@ -162,10 +162,6 @@ export function activate(context: vscode.ExtensionContext) {
             "1. Grammar, spelling, and punctuation errors.",
             "2. Semantic inconsistencies and logical errors (e.g., questions that end as statements).",
             "3. Inconsistent verb tenses or conflicting writing styles.",
-            "4. Awkward phrasing and poor sentence flow (e.g., run-on sentences or choppy text).",
-            "5. Redundancy, wordiness, and tautology (eliminate unnecessary fillers).",
-            "6. Vague word choices (replace general terms with more precise, context-aware vocabulary).",
-            "7. Ambiguous pronoun references (ensure it is clear what 'it', 'this', or 'they' refers to).",
             "Your goal is to make the text coherent, professional, and correct while preserving the original intent.",
             "Fix all identified issues. Return only the corrected text without any explanations or meta-talk."
         ].join('\n');
@@ -248,14 +244,8 @@ export function activate(context: vscode.ExtensionContext) {
             "5. Allow professional IT/AWS slang: AWS, org, IP, UDP, tofu, etc. (only if present in original)",
             "6. Allow abbreviations and contractions",
             "7. Make it look quickly typed by a human, not formally composed",
-            "8. Error Correction The input text may contain:",
-            "  - syntax/grammar errors",
-            "  - stylistic issues",
-            "  - factual inaccuracies",
-            "  - ambiguous statements",
-            "  - unintentional negativity",
             "Always correct these issues",
-            "9. If the text is not in English or contains non-English words: translate it to English"
+            "If the text is not in English or contains non-English words: translate it to English"
         ].join('\n');
 
         const instructions = config.get<string[]>("improveTextInstructions");

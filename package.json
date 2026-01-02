@@ -94,22 +94,22 @@
         {
           "command": "calamus.runTextDiagnostic",
           "when": "editorTextFocus",
-          "group": "calamus"
+          "group": "calamus@1"
         },
         {
           "command": "calamus.runTextCompletion",
           "when": "editorTextFocus",
-          "group": "calamus"
+          "group": "calamus@2"
         },
         {
           "command": "calamus.runTranslateText",
           "when": "editorTextFocus",
-          "group": "calamus"
+          "group": "calamus@3"
         },
         {
           "command": "calamus.runImproveText",
           "when": "editorTextFocus",
-          "group": "calamus"
+          "group": "calamus@4"
         }
       ]
     },
