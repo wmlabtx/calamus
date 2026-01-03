@@ -105,11 +105,14 @@ export function visualizeDiff(
                 dynamic.push(dynamicType);
                 editor.setDecorations(dynamicType, [{ range: new vscode.Range(start, end) }]);
                 i++; // skip next added part as we handled it here
+                // Advance offset by both the removed and the added parts we just consumed.
+                offset += part.value.length + nextPart.value.length;
             } else {
                 // Deletion
                 removed.push({ range: new vscode.Range(start, end) });
+                // Advance offset only by the removed text.
+                offset += part.value.length;
             }
-            offset += part.value.length;
         } else if (part.added) {
             // pure addition
             const anchor = editor.document.positionAt(baseOffset + offset);
