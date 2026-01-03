@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { GoogleGenAI } from "@google/genai";
-import * as Diff from 'diff'; // Still needed for logic outside utils if any, but main diff util is now in utils
 import { getTargetText, visualizeDiff, getParagraphRange } from './utils';
 
 
