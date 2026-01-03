@@ -52,11 +52,6 @@
         "category": "Calamus"
       },
       {
-        "command": "calamus.applyAllChanges",
-        "title": "Calamus: Apply All Changes",
-        "category": "Calamus"
-      },
-      {
         "command": "calamus.clearDecorations",
         "title": "Calamus: Clear Decorations",
         "category": "Calamus"
