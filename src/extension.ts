@@ -402,8 +402,10 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             if (lastDiagnosticFix && lastDiagnosticRange) {
-                log?.debug('Selection changed, clearing diagnostics');
-                clearAllDiagnostics(vscode.window.activeTextEditor);
+                if (!lastDiagnosticRange.contains(pos)) {
+                    log?.debug('Cursor moved outside diagnostic range, clearing diagnostics');
+                    clearAllDiagnostics(vscode.window.activeTextEditor);
+                }
             }
         })
     );
