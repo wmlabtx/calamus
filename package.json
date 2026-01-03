@@ -1,12 +1,16 @@
 {
   "name": "calamus",
+  "version": "0.0.2",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
   "displayName": "Calamus - AI Text Assistant",
   "description": "VSCode addon to bring AI functions to text documents",
-  "version": "0.0.1",
-  "publisher": "calamus",
-  "engines": {
-    "vscode": "^1.107.0"
+  "author": {
+    "name": "Murad Ismayilov",
+    "url": "https://github.com/wmlabtx/calamus"
   },
+  "publisher": "MuradIsmayilov",
   "categories": [
     "Other",
     "Machine Learning"
@@ -15,50 +19,91 @@
     "ai",
     "assistant",
     "text",
-    "openai",
-    "gpt"
+    "translation",
+    "gemini",
+    "grammar",
+    "spell-check",
+    "autocomplete"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "calamus.summarize",
-        "title": "Calamus: Summarize Text"
+        "command": "calamus.runTextDiagnostic",
+        "title": "Calamus: Check Text",
+        "category": "Calamus"
       },
       {
-        "command": "calamus.improve",
-        "title": "Calamus: Improve Text"
+        "command": "calamus.runTextCompletion",
+        "title": "Calamus: Complete Text",
+        "category": "Calamus"
       },
       {
-        "command": "calamus.translate",
-        "title": "Calamus: Translate Text"
+        "command": "calamus.runTranslateText",
+        "title": "Calamus: Translate Text",
+        "category": "Calamus"
       },
       {
-        "command": "calamus.explain",
-        "title": "Calamus: Explain Code/Text"
+        "command": "calamus.runImproveText",
+        "title": "Calamus: Improve Text",
+        "category": "Calamus"
+      },
+      {
+        "command": "calamus.clearDecorations",
+        "title": "Calamus: Clear Decorations",
+        "category": "Calamus"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "calamus.runTextDiagnostic",
+        "key": "f4",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "calamus.runTextCompletion",
+        "key": "f5",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "calamus.runTranslateText",
+        "key": "f6",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "calamus.runImproveText",
+        "key": "f7",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "calamus.acceptCompletion",
+        "key": "tab",
+        "when": "editorTextFocus && calamus.hasCompletion"
       }
     ],
     "menus": {
       "editor/context": [
         {
-          "when": "editorHasSelection",
-          "command": "calamus.summarize",
+          "command": "calamus.runTextDiagnostic",
+          "when": "editorTextFocus",
           "group": "calamus@1"
         },
         {
-          "when": "editorHasSelection",
-          "command": "calamus.improve",
+          "command": "calamus.runTextCompletion",
+          "when": "editorTextFocus",
           "group": "calamus@2"
         },
         {
-          "when": "editorHasSelection",
-          "command": "calamus.translate",
+          "command": "calamus.runTranslateText",
+          "when": "editorTextFocus",
           "group": "calamus@3"
         },
         {
-          "when": "editorHasSelection",
-          "command": "calamus.explain",
+          "command": "calamus.runImproveText",
+          "when": "editorTextFocus",
           "group": "calamus@4"
         }
       ]
@@ -69,51 +114,83 @@
         "calamus.apiKey": {
           "type": "string",
           "default": "",
-          "description": "OpenAI API Key for AI operations",
-          "markdownDescription": "Your OpenAI API Key. Get one at [OpenAI Platform](https://platform.openai.com/api-keys)"
+          "description": "Google Gemini API Key",
+          "markdownDescription": "Your Google Gemini API Key. Get one at [Google AI Studio](https://makersuite.google.com/app/apikey)"
         },
         "calamus.model": {
           "type": "string",
-          "default": "gpt-4o-mini",
+          "default": "gemini-2.0-flash-lite",
           "enum": [
-            "gpt-4o",
-            "gpt-4o-mini",
-            "gpt-4-turbo",
-            "gpt-3.5-turbo"
+            "gemini-2.0-flash-lite",
+            "gemini-2.5-flash",
+            "gemini-2.5-pro"
           ],
-          "description": "OpenAI model to use for AI operations"
+          "description": "Gemini model to use"
         },
-        "calamus.maxTokens": {
-          "type": "number",
-          "default": 2000,
-          "description": "Maximum number of tokens in the response"
+        "calamus.completionPrompt": {
+          "type": "string",
+          "editPresentation": "multilineText",
+          "default": "Maximum 20 words.",
+          "description": "Prompt for text completion"
         },
-        "calamus.temperature": {
-          "type": "number",
-          "default": 0.7,
-          "minimum": 0,
-          "maximum": 2,
-          "description": "Sampling temperature (0 = focused, 2 = creative)"
+        "calamus.improveTextInstructions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "1. Maintain the original tone and approximate length",
+            "2. Ensure the output looks naturally typed (no special typography, icons, bullets, lists or line breaks)",
+            "3. Suggested text must be: ",
+            "  - grammatically correct",
+            "  - friendly and professional",
+            "  - free from ambiguous statements",
+            "  - free from personal criticism or negativity",
+            "  - free from offensive content",
+            "  - appropriate for US workplace communication",
+            "4. Use modern American English",
+            "5. Allow professional IT/AWS slang: AWS, org, IP, UDP, tofu, etc. (only if present in original)",
+            "6. Allow abbreviations and contractions",
+            "7. Make it look quickly typed by a human, not formally composed",
+            "8. Error Correction The input text may contain:",
+            "  - syntax/grammar errors",
+            "  - stylistic issues",
+            "  - factual inaccuracies",
+            "  - ambiguous statements",
+            "  - unintentional negativity",
+            "Always correct these issues",
+            "9. If the text is not in English or contains non-English words: translate it to English"
+          ],
+          "markdownDescription": "Style for text improvement. For complex prompts, it is recommended to edit this directly in [settings.json](command:workbench.action.openSettingsJson)."
+        },
+        "calamus.secondLanguage": {
+          "type": "string",
+          "default": "Spanish",
+          "description": "Second language for translation"
         }
       }
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run bundle",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
-    "lint": "echo \"No linter configured\"",
-    "package": "vsce package"
+    "bundle": "node -e \"require('fs').rmSync('out', { recursive: true, force: true });\" && esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --minify",
+    "bundle-watch": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --watch",
+    "package": "vsce package --out vsix"
   },
   "devDependencies": {
+    "@types/diff": "^7.0.2",
     "@types/node": "^25.0.3",
-    "@types/vscode": "^1.107.0",
+    "@types/vscode": "1.104.0",
     "@vscode/vsce": "^3.7.1",
+    "esbuild": "^0.24.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "openai": "^6.15.0"
+    "@google/genai": "^1.34.0",
+    "diff": "^8.0.2"
   },
   "license": "MIT",
   "repository": {

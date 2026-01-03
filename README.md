@@ -1,98 +1,75 @@
-# Calamus - AI Text Assistant for VSCode
+# Calamus - AI Text Assistant for VS Code
 
-A powerful VSCode extension that brings AI-powered text manipulation functions directly to your text documents.
+Calamus is a powerful VS Code extension that brings AI-powered text editing features directly to your text documents using Google Gemini. It provides tools for text checking, completion, translation, and improvement, all integrated seamlessly into your editing workflow.
 
 ## Features
 
-Calamus provides the following AI-powered commands that work on selected text:
+### Check Text (F4)
+Automatically proofread your text for grammar, spelling, punctuation, and style issues.
+- **How it works**: Analyzes the current paragraph (or selected text) and visualizes changes.
+- **Visualization**: Deletions are shown as red strike-throughs, and additions/corrections appear as ghost text.
+- **Accept**: Press `Tab` to apply the corrections.
 
-- **Summarize Text**: Get a concise summary of selected content
-- **Improve Text**: Enhance writing clarity, conciseness, and quality
-- **Translate Text**: Translate to multiple languages (Spanish, French, German, Italian, Portuguese, Russian, Japanese, Chinese, Korean, Arabic, English)
-- **Explain Code/Text**: Get detailed explanations of code or complex text
+### Complete Text (F5)
+Stuck on a sentence? Let Calamus finish it for you.
+- **Context-Aware**: Analyzes up to 1000 characters of preceding text (including previous paragraphs) to generate natural continuations.
+- **Ghost Text**: The suggestion appears as gray ghost text at your cursor.
+- **Accept**: Press `Tab` to insert the completion.
+
+### Translate Text (F6)
+Instantly translate text between English and your configured second language.
+- **Bi-directional**: Automatically detects if the text is English (translates to target language) or the target language (translates to English).
+- **Preserves Nuance**: Designed to maintain tone, style, and formatting.
+- **Configurable**: Set your preferred `Second Language` in settings (default: Spanish).
+
+### Improve Text (F7)
+Enhance the quality of your writing with a single keystroke.
+- **Professional Polish**: Makes text clearer, more professional, and "native-sounding".
+- **Customizable**: Uses a set of predefined instructions (configurable in settings) to guide the improvement process (e.g., maintaining tone, removing ambiguity).
 
 ## Installation
 
-1. Clone this repository
-2. Run `npm install` to install dependencies
-3. Run `npm run compile` to build the extension
-4. Press F5 in VSCode to launch the extension in a new Extension Development Host window
-
-## Configuration
-
-Before using Calamus, you need to configure your OpenAI API key:
-
-1. Open VSCode Settings (File > Preferences > Settings or Cmd/Ctrl + ,)
-2. Search for "Calamus"
-3. Enter your OpenAI API Key in the `Calamus: Api Key` field
-   - Get an API key at [OpenAI Platform](https://platform.openai.com/api-keys)
-
-### Available Settings
-
-- **Calamus: Api Key** - Your OpenAI API key (required)
-- **Calamus: Model** - Choose the AI model (gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo)
-  - Default: `gpt-4o-mini`
-- **Calamus: Max Tokens** - Maximum tokens in the response
-  - Default: `2000`
-- **Calamus: Temperature** - Sampling temperature (0 = focused, 2 = creative)
-  - Default: `0.7`
+1. Install the extension from the VS Code Marketplace or via VSIX.
+2. Get a **Google Gemini API Key** from [Google AI Studio](https://makersuite.google.com/app/apikey).
+3. Open VS Code Settings (`Ctrl+,`), search for `calamus`, and enter your API key.
 
 ## Usage
 
-### Via Command Palette
+### Workflow
+1. **Open a text document** (Markdown, txt, etc.).
+2. **Place your cursor** in the paragraph you want to modify, or make a selection.
+3. **Trigger a command**:
+   - `F4`: Check for errors
+   - `F5`: Generate text completion
+   - `F6`: Translate
+   - `F7`: Improve text
+4. **Review**: The extension will show a diff (for edits) or ghost text (for completions).
+5. **Accept**: Press `Tab` to confirm the changes.
+   - If you move your cursor before accepting, the suggestions will disappear.
 
-1. Select text in any document
-2. Open the Command Palette (Cmd/Ctrl + Shift + P)
-3. Type "Calamus" to see available commands
-4. Choose the desired action
+### Commands
+- **Calamus: Check Text** (`F4`) - Proofread and fix grammar/spelling
+- **Calamus: Complete Text** (`F5`) - Generate text continuation
+- **Calamus: Translate Text** (`F6`) - Translate between English and Second Language
+- **Calamus: Improve Text** (`F7`) - Rewrite text for better style and clarity
+- **Calamus: Accept Completion** (`Tab`) - Apply the current suggestion/fix
+- **Calamus: Clear Decorations** - Remove all current suggestion highlights
 
-### Via Context Menu
+## Configuration
 
-1. Select text in any document
-2. Right-click on the selection
-3. Choose one of the Calamus commands from the context menu
+Customise Calamus in your VS Code Settings (`Ctrl+,` > `Calamus`):
 
-## Commands
-
-- `Calamus: Summarize Text` - Summarizes the selected text
-- `Calamus: Improve Text` - Rewrites text to be clearer and better
-- `Calamus: Translate Text` - Translates text to your chosen language
-- `Calamus: Explain Code/Text` - Provides a detailed explanation
+- **`calamus.apiKey`**: Your Google Gemini API Key.
+- **`calamus.model`**: The Gemini model to use (default: `gemini-2.0-flash-lite`).
+- **`calamus.secondLanguage`**: The target language for the Translation feature (default: "Spanish").
+- **`calamus.completionPrompt`**: Custom instructions for text completion.
+- **`calamus.improveTextInstructions`**: A list of rules for the "Improve Text" feature (e.g., "Make it sound professional", "Use American English").
 
 ## Requirements
 
-- VSCode version 1.107.0 or higher
-- An OpenAI API key
-- Internet connection for API calls
-
-## Development
-
-### Building
-
-```bash
-npm install
-npm run compile
-```
-
-### Packaging
-
-```bash
-npm run package
-```
-
-This creates a `.vsix` file that can be installed in VSCode.
-
-## Privacy & Security
-
-- Your API key is stored in VSCode settings and never transmitted anywhere except to OpenAI's API
-- Selected text is sent to OpenAI's API for processing
-- Review OpenAI's [privacy policy](https://openai.com/policies/privacy-policy) for details on data handling
+- VS Code v1.104.0 or higher.
+- A valid Google Gemini API Key.
 
 ## License
 
 MIT
-
-## Support
-
-For issues or feature requests, please visit the [GitHub repository](https://github.com/wmlabtx/calamus).
-
