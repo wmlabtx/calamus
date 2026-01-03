@@ -366,7 +366,7 @@ export function activate(context: vscode.ExtensionContext) {
                 let finalResponse = response;
                 const lastChar = selectedText.charAt(selectedText.length - 1);
                 // Check if text ends with punctuation and response doesn't start with space
-                if (/^[.,;!?;:,"'\-]$/.test(lastChar) && !finalResponse.startsWith(' ')) {
+                if (/^[.,;!?:,"'\-]$/.test(lastChar) && !finalResponse.startsWith(' ')) {
                     finalResponse = ' ' + finalResponse;
                 }
 
