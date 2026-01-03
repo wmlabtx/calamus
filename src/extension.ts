@@ -195,7 +195,7 @@ export function activate(context: vscode.ExtensionContext) {
         const secondLanguage = config.get<string>('secondLanguage');
         const prompt = [
             `You are a professional bi-lingual translator fluent in English and ${secondLanguage}.`,
-            "Task: Detect limits language of the input text.",
+            "Task: Detect the language of the input text.",
             `1. If the text is primarily in English, translate it to natural, high-quality ${secondLanguage}.`,
             `2. If the text is in ${secondLanguage} or in a mix of English and ${secondLanguage} or any other language, translate it to English.`,
             "Requirements:",
