@@ -82,6 +82,16 @@ export function visualizeDiff(
     const removed: vscode.DecorationOptions[] = [];
     const dynamic: vscode.TextEditorDecorationType[] = [];
 
+    // Decoration types for tracking
+    // We apply specific styles in the renderOptions for each item to target the 'after' content specifically
+    const replacementType = vscode.window.createTextEditorDecorationType({});
+    const insertionType = vscode.window.createTextEditorDecorationType({});
+
+    dynamic.push(replacementType, insertionType);
+
+    const replacementOptions: vscode.DecorationOptions[] = [];
+    const insertionOptions: vscode.DecorationOptions[] = [];
+
     const baseOffset = editor.document.offsetAt(range.start);
     let offset = 0;
 
@@ -92,46 +102,52 @@ export function visualizeDiff(
             const end = editor.document.positionAt(baseOffset + offset + part.value.length);
             const nextPart = i + 1 < diffs.length ? diffs[i + 1] : null;
 
+            // Always strikethrough the removed text
+            removed.push({ range: new vscode.Range(start, end) });
+
             if (nextPart && nextPart.added) {
-                // Replacement
-                const dynamicType = vscode.window.createTextEditorDecorationType({
-                    after: {
-                        contentText: ` → ${nextPart.value.trim()}`,
-                        color: new vscode.ThemeColor('editorGhostText.foreground'),
-                        fontStyle: 'italic',
-                        margin: '0 0 0 0.2em'
+                // Replacement (removed -> added match)
+                replacementOptions.push({
+                    range: new vscode.Range(start, end),
+                    renderOptions: {
+                        after: {
+                            contentText: nextPart.value,
+                            margin: '0 0 0 0.3em', // Small margin to separate from struck-through text
+                            color: new vscode.ThemeColor('editor.foreground'),
+                            backgroundColor: new vscode.ThemeColor('editor.findMatchHighlightBackground')
+                        }
                     }
                 });
-                dynamic.push(dynamicType);
-                editor.setDecorations(dynamicType, [{ range: new vscode.Range(start, end) }]);
-                i++; // skip next added part as we handled it here
-                // Advance offset by both the removed and the added parts we just consumed.
-                offset += part.value.length + nextPart.value.length;
+
+                i++; // skip next added part as it is consumed
+                offset += part.value.length; // Advance offset ONLY by the removed part. Added part is not in original text.
             } else {
-                // Deletion
-                removed.push({ range: new vscode.Range(start, end) });
-                // Advance offset only by the removed text.
+                // Pure Deletion
                 offset += part.value.length;
             }
         } else if (part.added) {
-            // pure addition
+            // Pure Insertion (no preceding removed part)
             const anchor = editor.document.positionAt(baseOffset + offset);
-            const dynamicType = vscode.window.createTextEditorDecorationType({
-                after: {
-                    contentText: ` [+] ${part.value.trim()}`,
-                    color: new vscode.ThemeColor('editorGhostText.foreground'),
-                    fontStyle: 'italic',
-                    margin: '0 0 0 0.2em'
+            insertionOptions.push({
+                range: new vscode.Range(anchor, anchor),
+                renderOptions: {
+                    after: {
+                        contentText: part.value,
+                        color: new vscode.ThemeColor('editor.foreground'),
+                        backgroundColor: new vscode.ThemeColor('diffEditor.insertedTextBackground')
+                    }
                 }
             });
-            dynamic.push(dynamicType);
-            editor.setDecorations(dynamicType, [{ range: new vscode.Range(anchor, anchor) }]);
+            // Added text does not advance offset in original document
         } else {
-            // unchanged
+            // Unchanged
             offset += part.value.length;
         }
     }
 
     editor.setDecorations(removedType, removed);
+    editor.setDecorations(replacementType, replacementOptions);
+    editor.setDecorations(insertionType, insertionOptions);
+
     return { removed, dynamic };
 }

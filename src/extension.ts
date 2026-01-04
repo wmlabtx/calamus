@@ -2,24 +2,22 @@ import * as vscode from 'vscode';
 import { GoogleGenAI } from "@google/genai";
 import { getTargetText, visualizeDiff, getParagraphRange } from './utils';
 
-
 // Variables
 
 let log: vscode.LogOutputChannel | null = null;
 let cachedAiClient: GoogleGenAI | null = null;
 let lastUsedApiKey: string | null = null;
 let lastManualCompletion: string | null = null;
-let completionPosition: vscode.Position | null = null;
+let completionRange: vscode.Range | null = null;
+let isInternalOperation = false;
 let lastDiagnosticFix: string | null = null;
 let lastDiagnosticRange: vscode.Range | null = null;
 
 // Decoration types
 
 const ghostTextDecorationType = vscode.window.createTextEditorDecorationType({
-    after: {
-        color: new vscode.ThemeColor('editorGhostText.foreground'),
-        fontStyle: 'italic',
-    }
+    color: new vscode.ThemeColor('editorGhostText.foreground'),
+    fontStyle: 'italic'
 });
 
 const diagnosticRemovedType = vscode.window.createTextEditorDecorationType({
@@ -33,12 +31,27 @@ let dynamicDecorations: vscode.TextEditorDecorationType[] = [];
 // Parameters: editor - the current text editor
 // Returns: none
 
-function clearGhostText(editor: vscode.TextEditor | undefined) {
-    if (editor) {
+// Description: clear ghost text state and remove inserted text
+// Parameters: editor
+// Returns: none
+
+async function clearGhostText(editor: vscode.TextEditor | undefined) {
+    if (editor && completionRange) {
+        if (!isInternalOperation) {
+            isInternalOperation = true;
+            try {
+                await editor.edit(editBuilder => {
+                    editBuilder.delete(completionRange!);
+                });
+            } catch (e) {
+                console.error(e);
+            }
+            isInternalOperation = false;
+        }
         editor.setDecorations(ghostTextDecorationType, []);
     }
+    completionRange = null;
     lastManualCompletion = null;
-    completionPosition = null;
     vscode.commands.executeCommand('setContext', 'calamus.hasCompletion', false);
 }
 
@@ -109,7 +122,16 @@ async function getGeminiResponse(contents: string, prompt: string): Promise<any>
         log?.error(`name: ${e.name}`);
         log?.error(`message: ${e.message}`);
         log?.error(`status: ${e.status}`);
-        vscode.window.showErrorMessage(e.message);
+        let message = e.message;
+        try {
+            const parsed = JSON.parse(e.message);
+            if (parsed.error && parsed.error.message) {
+                message = parsed.error.message;
+            }
+        } catch (err) {
+            // ignore
+        }
+        vscode.window.showErrorMessage(message);
     });
 
     if (!result) {
@@ -156,13 +178,19 @@ export function activate(context: vscode.ExtensionContext) {
 
         const instruction = config.get<string[]>("proofreadingInstructions");
         const prompt = instruction ? instruction.join('\n') : [
-            "You are a professional editor and expert proofreader.",
-            "Analyze the text for the following issues:",
-            "1. Grammar, spelling, and punctuation errors.",
-            "2. Semantic inconsistencies and logical errors (e.g., questions that end as statements).",
-            "3. Inconsistent verb tenses or conflicting writing styles.",
-            "Your goal is to make the text coherent, professional, and correct while preserving the original intent.",
-            "Fix all identified issues. Return only the corrected text without any explanations or meta-talk."
+            "You are a strict proofreading engine. Your mission is to fix every objective mechanical error while leaving the style untouched.",
+            "Correct the following strictly:",
+            "1. Spelling and Typos (fix all typos like 'wil' -> 'will', 'teh' -> 'the').",
+            "2. Grammar (syntax, agreement, tense consistency).",
+            "3. Punctuation.",
+            "4. Word Usage (homophones, wrong words).",
+            "CONSTRAINTS (Adhere strictly):",
+            "- YOU MUST FIX all spelling mistakes and typos.",
+            "- DO NOT change the style, tone, choice of words (unless wrong), or sentence structure.",
+            "- DO NOT 'polish' or 'improve' the writing.",
+            "- DO NOT paraphrase.",
+            "- If a sentence is awkward but grammatically correct, LEAVE IT ALONE.",
+            "Return only the corrected text with no markdown or explanations."
         ].join('\n');
 
         const response = await getGeminiResponse(target.text, prompt);
@@ -247,8 +275,8 @@ export function activate(context: vscode.ExtensionContext) {
             "If the text is not in English or contains non-English words: translate it to English"
         ].join('\n');
 
-        const instructions = config.get<string[]>("improveTextInstructions");
-        const prompt = instructions ? instructions.join('\n') : defaultPrompt;
+        const instructions = config.get<string>("improveTextInstructions");
+        const prompt = instructions || defaultPrompt;
 
         const response = await getGeminiResponse(target.text, prompt);
         if (response && response !== target.text) {
@@ -271,12 +299,16 @@ export function activate(context: vscode.ExtensionContext) {
     const acceptCompletionCommand = vscode.commands.registerCommand('calamus.acceptCompletion', async () => {
         const editor = vscode.window.activeTextEditor;
         if (editor) {
-            if (lastManualCompletion && completionPosition) {
-                // Handle ghost text completion
-                await editor.edit(editBuilder => {
-                    editBuilder.insert(completionPosition!, lastManualCompletion!);
-                });
-                clearGhostText(editor);
+            if (completionRange) {
+                // Ghost text is already in document, just clear decoration and context
+                editor.setDecorations(ghostTextDecorationType, []);
+
+                // Move cursor to end of completion
+                editor.selection = new vscode.Selection(completionRange.end, completionRange.end);
+
+                completionRange = null;
+                lastManualCompletion = null;
+                vscode.commands.executeCommand('setContext', 'calamus.hasCompletion', false);
             } else if (lastDiagnosticFix && lastDiagnosticRange) {
                 // Handle diagnostic grammar fix
                 await editor.edit(editBuilder => {
@@ -354,6 +386,7 @@ export function activate(context: vscode.ExtensionContext) {
                 "Do not repeat any of the user's text.",
                 "Do not correct or modify the user's text - only add new characters after it.",
                 "If the text ends mid-word, complete that word first, then continue.",
+                "If the text ends with a complete word, START your response with a space.",
                 completionPrompt
             ].join('\n');
 
@@ -363,24 +396,32 @@ export function activate(context: vscode.ExtensionContext) {
                 log?.debug(response);
 
                 let finalResponse = response;
-                const lastChar = selectedText.charAt(selectedText.length - 1);
-                // Check if text ends with punctuation and response doesn't start with space
-                if (/^[.,;!?:,"'\-]$/.test(lastChar) && !finalResponse.startsWith(' ')) {
+                if (!selectedText.endsWith(' ') && !finalResponse.startsWith(' ')) {
                     finalResponse = ' ' + finalResponse;
                 }
 
                 lastManualCompletion = finalResponse;
-                completionPosition = editor.selection.active;
+                const startPos = editor.selection.active;
 
-                editor.setDecorations(ghostTextDecorationType, [{
-                    range: new vscode.Range(completionPosition, completionPosition),
-                    renderOptions: {
-                        after: { contentText: finalResponse }
-                    }
-                }]);
+                // Insert text directly to support wrapper
+                isInternalOperation = true;
+                await editor.edit(editBuilder => {
+                    editBuilder.insert(startPos, finalResponse);
+                });
+                isInternalOperation = false;
+
+                // Calculate range of inserted text
+                const endPos = editor.document.positionAt(editor.document.offsetAt(startPos) + finalResponse.length);
+                completionRange = new vscode.Range(startPos, endPos);
+
+                // Apply decoration
+                editor.setDecorations(ghostTextDecorationType, [completionRange]);
+
+                // Reset cursor to start so it feels like ghost text
+                editor.selection = new vscode.Selection(startPos, startPos);
 
                 vscode.commands.executeCommand('setContext', 'calamus.hasCompletion', true);
-                log?.debug(`Ghost text decoration applied at ${completionPosition.line}:${completionPosition.character}`);
+                log?.debug(`Ghost text inserted and decorated at ${startPos.line}:${startPos.character}`);
             }
         }
     });
@@ -393,9 +434,22 @@ export function activate(context: vscode.ExtensionContext) {
                 return;
             }
             const pos = e.selections[0].active;
-            if (lastManualCompletion && completionPosition) {
-                if (pos.line !== completionPosition.line || pos.character !== completionPosition.character) {
-                    log?.debug('Cursor moved, clearing decoration');
+
+            // If we have a completion and the cursor moves away from the start position (unless it's to the end which we handle in accept),
+            // we should probably clear. But user might be inspecting. 
+            // Better policy: If cursor moves OUT of the range or user clicks elsewhere, clear.
+            // But simplify: If cursor moves at all, we clear, UNLESS we just accepted.
+            // Wait, acceptCompletion moves cursor. We need to be careful.
+
+            // Actually, if user strictly moves cursor manually, we should clear (reject).
+            // But detecting "manual move" vs "programmatic move" is hard.
+            // For now, rely on `acceptCompletion` clearing the state `completionRange = null` BEFORE moving cursor.
+
+            if (completionRange) {
+                // User requirement: only clear if cursor moves outside the paragraph
+                const currentParaRange = getParagraphRange(vscode.window.activeTextEditor!, completionRange.start.line);
+                if (!currentParaRange.contains(pos)) {
+                    log?.debug('Cursor moved outside paragraph, removing ghost text');
                     clearGhostText(vscode.window.activeTextEditor);
                 }
             }
@@ -405,6 +459,17 @@ export function activate(context: vscode.ExtensionContext) {
                     log?.debug('Cursor moved outside diagnostic range, clearing diagnostics');
                     clearAllDiagnostics(vscode.window.activeTextEditor);
                 }
+            }
+        }),
+        vscode.workspace.onDidChangeTextDocument((e) => {
+            if (completionRange && !isInternalOperation && e.document === vscode.window.activeTextEditor?.document) {
+                if (e.contentChanges.length === 0) {
+                    return;
+                }
+                // User typed something or edited the document.
+                // We should remove the ghost text immediately to avoid corruption.
+                log?.debug('Document changed externally (user edit), removing ghost text');
+                clearGhostText(vscode.window.activeTextEditor);
             }
         })
     );
