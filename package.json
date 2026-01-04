@@ -1,6 +1,6 @@
 {
   "name": "calamus",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.104.0"
   },
@@ -134,34 +134,11 @@
           "description": "Prompt for text completion"
         },
         "calamus.improveTextInstructions": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "1. Maintain the original tone and approximate length",
-            "2. Ensure the output looks naturally typed (no special typography, icons, bullets, lists or line breaks)",
-            "3. Suggested text must be: ",
-            "  - grammatically correct",
-            "  - friendly and professional",
-            "  - free from ambiguous statements",
-            "  - free from personal criticism or negativity",
-            "  - free from offensive content",
-            "  - appropriate for US workplace communication",
-            "4. Use modern American English",
-            "5. Allow professional IT/AWS slang: AWS, org, IP, UDP, tofu, etc. (only if present in original)",
-            "6. Allow abbreviations and contractions",
-            "7. Make it look quickly typed by a human, not formally composed",
-            "8. Error Correction The input text may contain:",
-            "  - syntax/grammar errors",
-            "  - stylistic issues",
-            "  - factual inaccuracies",
-            "  - ambiguous statements",
-            "  - unintentional negativity",
-            "Always correct these issues",
-            "9. If the text is not in English or contains non-English words: translate it to English"
-          ],
-          "markdownDescription": "Style for text improvement. For complex prompts, it is recommended to edit this directly in [settings.json](command:workbench.action.openSettingsJson)."
+          "type": "string",
+          "editPresentation": "multilineText",
+          "default": "1. Maintain the original tone and approximate length\n2. Ensure the output looks naturally typed (no special typography, icons, bullets, lists or line breaks)\n3. Suggested text must be: \n  - grammatically correct\n  - friendly and professional\n  - free from ambiguous statements\n  - free from personal criticism or negativity\n  - free from offensive content\n  - appropriate for US workplace communication\n4. Use modern American English\n5. Allow professional IT/AWS slang: AWS, org, IP, UDP, tofu, etc. (only if present in original)\n6. Allow abbreviations and contractions\n7. Make it look quickly typed by a human, not formally composed\n8. If the text is not in English or contains non-English words: translate it to English",
+          "description": "Instructions for text improvement",
+          "markdownDescription": "Instructions for text improvement. For complex prompts, it is recommended to edit this directly in [settings.json](command:workbench.action.openSettingsJson)."
         },
         "calamus.secondLanguage": {
           "type": "string",
