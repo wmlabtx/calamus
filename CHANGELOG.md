@@ -1,8 +1,19 @@
 # Changelog
 
-All notable changes to the Calamus extension will be documented in this file.
+## [0.0.3] - 2026-01-03 - Bug fixes and improvements
 
-## [0.0.2] - 2025-01-02 - Reworked release
+### Added
+- **Word Wrap for Ghost Text**: Long completions now wrap correctly within the editor view.
+- **Enhanced Diff Visualization**: Improved visual feedback with strikethrough for deletions and distinct highlighting for insertions.
+- **Context Improvements**: Added paragraph-based context awareness for smarter completions.
+- **Detailed Error Reporting**: Improved error message extraction to surface helpful details from the API.
+
+### Fixed
+- **Ghost Text Spacing**: Fixed logic to ensure correct spacing between user text and AI completion.
+- **Spellcheck Prompt**: Refined the "Check Text" prompt to strictly focus on grammar and spelling without altering style.
+
+
+## [0.0.2] - 2026-01-02 - Reworked release
 
 ### Architecture & Philosophy
 - **Complete Refactor**: The codebase was completely restructured from the initial "vibe-coded" prototype to a robust, maintainable architecture.
