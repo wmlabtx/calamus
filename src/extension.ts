@@ -112,12 +112,11 @@ async function getGeminiResponse(contents: string, prompt: string): Promise<any>
     }
 
     const ai = cachedAiClient;
+    const finalPrompt = `${prompt}\n\nStrictly follow the above instructions for the following text:\n"""\n${contents}\n"""\nOutput:`;
+
     const result = await ai.models.generateContent({
         model: model,
-        contents: contents,
-        config: {
-            systemInstruction: prompt,
-        },
+        contents: finalPrompt,
     }).catch((e: any) => {
         log?.error(`name: ${e.name}`);
         log?.error(`message: ${e.message}`);
@@ -258,21 +257,23 @@ export function activate(context: vscode.ExtensionContext) {
         if (!target) return;
 
         const defaultPrompt = [
-            "1. Maintain the original tone and approximate length",
-            "2. Ensure the output looks naturally typed (no special typography, icons, bullets, lists or line breaks)",
-            "3. Suggested text must be: ",
+            "You are an expert text refiner. Your goal is to rewrite the input text to sound more natural, human, and professional.",
+            "Strictly follow these rules:",
+            "1. Output ONLY the rewritten text. Do NOT include any intro, outro, explanations, or conversational filler like 'Here is the text'.",
+            "2. Maintain the original tone and approximate length.",
+            "3. Ensure the output looks naturally typed (no special typography, icons, bullets, lists or line breaks).",
+            "4. Suggested text must be: ",
             "  - grammatically correct",
             "  - friendly and professional",
             "  - free from ambiguous statements",
             "  - free from personal criticism or negativity",
             "  - free from offensive content",
             "  - appropriate for US workplace communication",
-            "4. Use modern American English",
-            "5. Allow professional IT/AWS slang: AWS, org, IP, UDP, tofu, etc. (only if present in original)",
-            "6. Allow abbreviations and contractions",
-            "7. Make it look quickly typed by a human, not formally composed",
-            "Always correct these issues",
-            "If the text is not in English or contains non-English words: translate it to English"
+            "5. Use modern American English.",
+            "6. Allow professional IT/AWS slang: AWS, org, IP, UDP, tofu, etc. (only if present in original).",
+            "7. Allow abbreviations and contractions.",
+            "8. Make it look quickly typed by a human, not formally composed.",
+            "9. If the text is not in English or contains non-English words: translate it to English."
         ].join('\n');
 
         const instructions = config.get<string>("improveTextInstructions");
